@@ -14,6 +14,20 @@ CREATE TABLE users
     UNIQUE (username)
 );
 
+CREATE TABLE proxy
+(
+    id             INTEGER PRIMARY KEY,
+    enabled        BOOLEAN,
+    name           TEXT NOT NULL,
+	type           TEXT NOT NULL,
+    addr           TEXT NOT NULL,
+	auth_user      TEXT,
+	auth_pass      TEXT,
+    timeout        INTEGER,
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE indexer
 (
     id                  INTEGER PRIMARY KEY,
@@ -24,8 +38,11 @@ CREATE TABLE indexer
     enabled             BOOLEAN,
     name                TEXT NOT NULL,
     settings            TEXT,
+    use_proxy           BOOLEAN DEFAULT FALSE,
+    proxy_id            INTEGER,
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proxy_id) REFERENCES proxy(id) ON DELETE SET NULL,
     UNIQUE (identifier)
 );
 
@@ -51,8 +68,11 @@ CREATE TABLE irc_network
     bot_mode            BOOLEAN DEFAULT FALSE,
     connected           BOOLEAN,
     connected_since     TIMESTAMP,
+    use_proxy           BOOLEAN DEFAULT FALSE,
+    proxy_id            INTEGER,
     created_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
     updated_at          TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    FOREIGN KEY (proxy_id) REFERENCES proxy(id) ON DELETE SET NULL,
     UNIQUE (server, port, nick)
 );
 
@@ -106,6 +126,8 @@ CREATE TABLE filter
     match_other                    TEXT []   DEFAULT '{}',
     except_other                   TEXT []   DEFAULT '{}',
     years                          TEXT,
+    months                         TEXT,
+    days                           TEXT,
     artists                        TEXT,
     albums                         TEXT,
     release_types_match            TEXT []   DEFAULT '{}',
@@ -137,6 +159,12 @@ CREATE TABLE filter
     max_leechers                   INTEGER DEFAULT 0
 );
 
+CREATE INDEX filter_enabled_index
+    ON filter (enabled);
+
+CREATE INDEX filter_priority_index
+    ON filter (priority);
+
 CREATE TABLE filter_external
 (
     id                                  INTEGER PRIMARY KEY,
@@ -158,6 +186,9 @@ CREATE TABLE filter_external
     filter_id                           INTEGER NOT NULL,
     FOREIGN KEY (filter_id)             REFERENCES filter(id) ON DELETE CASCADE
 );
+
+CREATE INDEX filter_external_filter_id_index
+    ON filter_external(filter_id);
 
 CREATE TABLE filter_indexer
 (
@@ -244,6 +275,8 @@ CREATE TABLE "release"
     season            INTEGER,
     episode           INTEGER,
     year              INTEGER,
+    month             INTEGER,
+    day               INTEGER,
     resolution        TEXT,
     source            TEXT,
     codec             TEXT,
@@ -1522,5 +1555,66 @@ ALTER TABLE filter
 
 	UPDATE indexer
     SET identifier_external = name;
+`,
+	`ALTER TABLE "release"
+ADD COLUMN month INTEGER;
+
+ALTER TABLE "release"
+ADD COLUMN day INTEGER;
+
+ALTER TABLE filter
+ADD COLUMN months TEXT;
+
+ALTER TABLE filter
+ADD COLUMN days TEXT;
+`,
+	`CREATE TABLE proxy
+(
+    id             INTEGER PRIMARY KEY,
+    enabled        BOOLEAN,
+    name           TEXT NOT NULL,
+	type           TEXT NOT NULL,
+    addr           TEXT NOT NULL,
+	auth_user      TEXT,
+	auth_pass      TEXT,
+    timeout        INTEGER,
+    created_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at     TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+ALTER TABLE indexer
+    ADD proxy_id INTEGER
+        CONSTRAINT indexer_proxy_id_fk
+            REFERENCES proxy(id)
+            ON DELETE SET NULL;
+
+ALTER TABLE indexer
+    ADD use_proxy BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE irc_network
+    ADD use_proxy BOOLEAN DEFAULT FALSE;
+
+ALTER TABLE irc_network
+    ADD proxy_id INTEGER
+        CONSTRAINT irc_network_proxy_id_fk
+            REFERENCES proxy(id)
+            ON DELETE SET NULL;
+`,
+	`UPDATE indexer
+	SET base_url = 'https://fuzer.xyz/'
+	WHERE base_url = 'https://fuzer.me/';
+`,
+	`CREATE INDEX filter_external_filter_id_index
+    ON filter_external(filter_id);
+
+CREATE INDEX filter_enabled_index
+    ON filter (enabled);
+
+CREATE INDEX filter_priority_index
+    ON filter (priority);
+`,
+	`UPDATE irc_network
+    SET server = 'irc.fuzer.xyz'
+    WHERE server = 'irc.fuzer.me';
 `,
 }

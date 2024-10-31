@@ -21,11 +21,12 @@ Full documentation can be found at [https://autobrr.com](https://autobrr.com)
    - [Available Download Clients and Actions](#available-download-clients-and-actions)
    - [RSS and Usenet Support](#rss-and-usenet-support)
 3. [Installation](#installation)
-   - [Swizzin](#swizzin)
+   - [Swizzin](#swizzin-dedi)
    - [Saltbox](#saltbox)
    - [QuickBox](#quickbox)
    - [Shared Seedbox](#shared-seedbox)
    - [Docker Compose](#docker-compose)
+      - [Distroless docker images](#distroless-docker-images)
    - [Windows](#windows)
    - [MacOS](#macos)
    - [Linux Generic](#linux-generic)
@@ -209,6 +210,21 @@ Then start with:
 docker compose up -d
 ```
 
+### Distroless Docker Images
+
+> [!CAUTION]
+> This image comes without a shell, and external filtering and actions relying on `exec` will therefore not work with anything but compiled static binaries.
+> 
+> To clarify: **`BASH` and `SH` shell scripts WILL NOT WORK!**
+>
+> Use the standard image if you rely on this functionality.
+
+For users who prioritize container security, one of the longterm maintainers offer alternative Docker images built on [Distroless](https://github.com/GoogleContainerTools/distroless). Specifically the `distroless/static-debian12:nonroot` base image.
+
+Distroless images do not contain a package manager or shell, thereby reducing the potential attack surface and making them a more secure option. These stripped-back images contain only the application and its runtime dependencies.
+
+The repository for these builds can be found here: [https://github.com/s0up4200/autobrr-distroless](https://github.com/s0up4200/autobrr-distroless)
+
 ### Windows
 
 Check the Windows Setup Guide [here](https://autobrr.com/installation/windows).
@@ -305,7 +321,7 @@ Whether you're fixing a bug, adding a feature, or improving documentation, your 
 ### Reporting Issues and Suggestions
 
 - **Report Bugs:** Encountered a bug? Please report it using our [bug report template](/.github/ISSUE_TEMPLATE/bug_report.md). Include detailed steps to reproduce, expected behavior, and any relevant screenshots or logs.
-- **Feature Requests:** Submit it using our [feature request template](/.github/ISSUE_TEMPLATE/feature_request.md). Describe your idea and how it will improve `autobrr`.
+- **Feature Requests:** Submit your feature request by [opening a new idea in our discussions](https://github.com/autobrr/autobrr/discussions/new?category=ideas). Describe your idea and how it will improve `autobrr`.
 
 ### Code Contributions
 

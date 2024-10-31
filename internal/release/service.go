@@ -19,8 +19,7 @@ import (
 )
 
 type Service interface {
-	Find(ctx context.Context, query domain.ReleaseQueryParams) (res []*domain.Release, nextCursor int64, count int64, err error)
-	FindRecent(ctx context.Context) ([]*domain.Release, error)
+	Find(ctx context.Context, query domain.ReleaseQueryParams) (*domain.FindReleasesResponse, error)
 	Get(ctx context.Context, req *domain.GetReleaseRequest) (*domain.Release, error)
 	GetActionStatus(ctx context.Context, req *domain.GetReleaseActionStatusRequest) (*domain.ReleaseActionStatus, error)
 	GetIndexerOptions(ctx context.Context) ([]string, error)
@@ -58,12 +57,8 @@ func NewService(log logger.Logger, repo domain.ReleaseRepo, actionSvc action.Ser
 	}
 }
 
-func (s *service) Find(ctx context.Context, query domain.ReleaseQueryParams) (res []*domain.Release, nextCursor int64, count int64, err error) {
+func (s *service) Find(ctx context.Context, query domain.ReleaseQueryParams) (*domain.FindReleasesResponse, error) {
 	return s.repo.Find(ctx, query)
-}
-
-func (s *service) FindRecent(ctx context.Context) (res []*domain.Release, err error) {
-	return s.repo.FindRecent(ctx)
 }
 
 func (s *service) Get(ctx context.Context, req *domain.GetReleaseRequest) (*domain.Release, error) {
@@ -211,9 +206,9 @@ func (s *service) processFilters(ctx context.Context, filters []*domain.Filter, 
 		}
 
 		if !match {
-			l.Trace().Msgf("release.Process: indexer: %s, filter: %s release: %s, no match. rejections: %s", release.Indexer.Name, release.FilterName, release.TorrentName, f.RejectionsString(false))
+			l.Trace().Msgf("release.Process: indexer: %s, filter: %s release: %s, no match. rejections: %s", release.Indexer.Name, release.FilterName, release.TorrentName, f.RejectReasons.String())
 
-			l.Debug().Msgf("filter %s rejected release: %s", f.Name, f.RejectionsString(true))
+			l.Debug().Msgf("filter %s rejected release: %s", f.Name, release.TorrentName)
 			continue
 		}
 
@@ -221,7 +216,7 @@ func (s *service) processFilters(ctx context.Context, filters []*domain.Filter, 
 
 		// found matching filter, lets find the filter actions and attach
 		active := true
-		actions, err := s.actionSvc.FindByFilterID(ctx, f.ID, &active)
+		actions, err := s.actionSvc.FindByFilterID(ctx, f.ID, &active, false)
 		if err != nil {
 			s.log.Error().Err(err).Msgf("release.Process: error finding actions for filter: %s", f.Name)
 			return err
@@ -375,19 +370,31 @@ func (s *service) Retry(ctx context.Context, req *domain.ReleaseActionRetryReq) 
 	// get release
 	release, err := s.Get(ctx, &domain.GetReleaseRequest{Id: req.ReleaseId})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "retry error: could not find release by id: %d", req.ReleaseId)
+	}
+
+	indexerInfo, err := s.indexerSvc.GetBy(ctx, domain.GetIndexerRequest{Identifier: release.Indexer.Identifier})
+	if err != nil {
+		return errors.Wrap(err, "retry error: could not get indexer by identifier: %s", release.Indexer.Identifier)
+	}
+
+	release.Indexer = domain.IndexerMinimal{
+		ID:                 int(indexerInfo.ID),
+		Name:               indexerInfo.Name,
+		Identifier:         indexerInfo.Identifier,
+		IdentifierExternal: indexerInfo.IdentifierExternal,
 	}
 
 	// get release filter action status
 	status, err := s.GetActionStatus(ctx, &domain.GetReleaseActionStatusRequest{Id: req.ActionStatusId})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "retry error: could not get release action")
 	}
 
 	// get filter action with action id from status
 	filterAction, err := s.actionSvc.Get(ctx, &domain.GetActionRequest{Id: int(status.ActionID)})
 	if err != nil {
-		return err
+		return errors.Wrap(err, "retry error: could not get filter action for release")
 	}
 
 	// run filterAction
